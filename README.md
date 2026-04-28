@@ -1,4 +1,4 @@
-# ImprovedTalents-wrath
+# ImprovedTalents-WotLK
 Improved Talents panel for WoW WotLK 3.3.5a client
 
 
