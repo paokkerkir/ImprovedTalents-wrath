@@ -1,6 +1,6 @@
 -- ImprovedTalents
 -- Uses SavedVariables (global): TALENTSVIEWER_SV
--- Ported for WoW 3.3.5 (WotLK)
+-- Ported for WoW 3.3.5a (WotLK)
 
 local function Debug(msg)
     if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
