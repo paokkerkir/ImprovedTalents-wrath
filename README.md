@@ -31,5 +31,5 @@ Improved Talents is a replacement talent frame addon for WoW 3.3.5 (WotLK). Inst
   - Persistent settings - compact mode preference saved between sessions via SavedVariables
 
 # Installation
-- Download as .zip
-- Extract folder "ImprovedTalents" to Wow/Interface/Addons
+- [Download latest release](https://github.com/paokkerkir/ImprovedTalents-WotLK/releases/latest/download/ImprovedTalents.zip).
+- Extract to Wow/Interface/Addons
