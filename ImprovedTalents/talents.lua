@@ -1,6 +1,6 @@
 -- ImprovedTalents
 -- Uses SavedVariables (global): TALENTSVIEWER_SV
--- Ported for WoW 3.3.5a (WotLK)
+-- Ported for WoW 3.3.5 (WotLK)
 
 local function Debug(msg)
     if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
@@ -95,6 +95,7 @@ local function CreateSpecButton(parent, group)
     -- Gold glow shown when this spec is the currently active (live) one
     local glow = btn:CreateTexture(nil, 'OVERLAY')
     glow:SetTexture('Interface\\SpellBook\\SpellBook-SkillLineTab-Glow')
+    glow:SetBlendMode('ADD')
     glow:SetWidth(64); glow:SetHeight(64)
     glow:SetPoint('TOPLEFT', btn, 'TOPLEFT', -3, 11)
     glow:Hide()
@@ -172,7 +173,7 @@ local function CreateMainFrame()
     local previewCheckbox = CreateFrame('CheckButton', nil, frame, 'UICheckButtonTemplate')
     previewCheckbox:SetWidth(20)
     previewCheckbox:SetHeight(20)
-    previewCheckbox:SetPoint('BOTTOMLEFT', frame, 'BOTTOMLEFT', 12, 44)
+    previewCheckbox:SetPoint('BOTTOMLEFT', frame, 'BOTTOMLEFT', 12, 40)
     previewCheckbox.text = previewCheckbox:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
     previewCheckbox.text:SetPoint('LEFT', previewCheckbox, 'RIGHT', 4, 0)
     previewCheckbox.text:SetText('Preview')
