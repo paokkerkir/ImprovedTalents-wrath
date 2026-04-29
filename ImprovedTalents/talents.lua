@@ -58,7 +58,7 @@ StaticPopupDialogs['IMPROVEDTALENTS_CONFIRM_LEARN_PREVIEW'] = {
     text = 'Learn these talents?',
     button1 = YES,
     button2 = NO,
-    OnAccept = function() LearnPreviewTalents(isPetMode) end,
+    OnAccept = function() pcall(LearnPreviewTalents, isPetMode) end,
     hideOnEscape = 1,
     timeout = 0,
     exclusive = 1,
@@ -201,7 +201,7 @@ local function CreateMainFrame()
     resetButton:SetText('Reset')
     resetButton:Hide()
     resetButton:SetScript('OnClick', function()
-        ResetGroupPreviewTalentPoints(isPetMode, currentTalentGroup)
+        pcall(ResetGroupPreviewTalentPoints, isPetMode, currentTalentGroup)
     end)
     frame.resetButton = resetButton
 
@@ -329,8 +329,8 @@ UpdatePreviewBar = function()
     if previewMode and isActiveSpec and cp > 0 then
         frame.learnButton:Show()
         frame.resetButton:Show()
-        local staged = GetGroupPreviewTalentPointsSpent(isPetMode, currentTalentGroup)
-        if staged > 0 then
+        local ok, staged = pcall(GetGroupPreviewTalentPointsSpent, isPetMode, currentTalentGroup)
+        if ok and staged > 0 then
             frame.learnButton:Enable()
             frame.resetButton:Enable()
         else
@@ -501,9 +501,9 @@ local function CreateTalentButton(tabIndex, talentIndex, tier, column, isPet)
         if mouseButton == 'RightButton' then
             if previewMode then
                 if self.isPet then
-                    AddPreviewTalentPoints(self.tabIndex, self.talentIndex, -1, true, 1)
+                    pcall(AddPreviewTalentPoints, self.tabIndex, self.talentIndex, -1, true, 1)
                 else
-                    AddPreviewTalentPoints(self.tabIndex, self.talentIndex, -1, false, currentTalentGroup)
+                    pcall(AddPreviewTalentPoints, self.tabIndex, self.talentIndex, -1, false, currentTalentGroup)
                 end
             end
             return
@@ -533,9 +533,9 @@ local function CreateTalentButton(tabIndex, talentIndex, tier, column, isPet)
         if talentMeetsPrereq and talentTierUnlocked and characterPoints > 0 and talentRank < talentMaxRank then
             if previewMode then
                 if self.isPet then
-                    AddPreviewTalentPoints(self.tabIndex, self.talentIndex, 1, true, 1)
+                    pcall(AddPreviewTalentPoints, self.tabIndex, self.talentIndex, 1, true, 1)
                 else
-                    AddPreviewTalentPoints(self.tabIndex, self.talentIndex, 1, false, currentTalentGroup)
+                    pcall(AddPreviewTalentPoints, self.tabIndex, self.talentIndex, 1, false, currentTalentGroup)
                 end
             else
                 if self.isPet then
@@ -894,8 +894,10 @@ eventFrame:RegisterEvent('PLAYER_TALENT_UPDATE')
 eventFrame:RegisterEvent('PET_TALENT_UPDATE')
 eventFrame:RegisterEvent('UNIT_PET')
 eventFrame:RegisterEvent('ACTIVE_TALENT_GROUP_CHANGED')
-eventFrame:RegisterEvent('PREVIEW_TALENT_POINTS_CHANGED')
-eventFrame:RegisterEvent('PREVIEW_PET_TALENT_POINTS_CHANGED')
+pcall(function()
+    eventFrame:RegisterEvent('PREVIEW_TALENT_POINTS_CHANGED')
+    eventFrame:RegisterEvent('PREVIEW_PET_TALENT_POINTS_CHANGED')
+end)
 eventFrame:SetScript('OnEvent', function(self, event, arg1)
     if event == 'UNIT_PET' then
         if arg1 == 'player' then
