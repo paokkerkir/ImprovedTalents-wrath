@@ -760,10 +760,10 @@ Update = function()
                 local talentName, iconTexture, tier, column, rank, maxRank
                 if isPetMode then
                     talentName, iconTexture, tier, column, rank, maxRank =
-                        GetTalentInfo(tabIndex, talentIndex, false, true, 1)
+                        GetTalentInfo(tabIndex, talentIndex, false, true, 1, previewMode)
                 else
                     talentName, iconTexture, tier, column, rank, maxRank =
-                        GetTalentInfo(tabIndex, talentIndex, false, false, currentTalentGroup)
+                        GetTalentInfo(tabIndex, talentIndex, false, false, currentTalentGroup, previewMode)
                 end
                 if talentName then
                     button.icon:SetTexture(iconTexture)
