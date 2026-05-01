@@ -24,6 +24,8 @@ local petButtonsCreated = false
 local lastLayoutNumTabs = -1
 local currentTalentGroup = 1
 local previewMode = false
+local isGlyphMode = false
+local talentFrameHeight = 0
 
 local PLAYER_TALENTS_PER_TIER = 5
 local PET_TALENTS_PER_TIER = 3
@@ -34,6 +36,7 @@ local CreatePetTalents
 local UpdatePetButton
 local UpdateSpecButtons
 local UpdatePreviewBar
+local UpdateGlyphPanel
 
 local TALENT_BRANCH_TEXTURECOORDS = {
     up = {[1] = {0.12890625, 0.25390625, 0, 0.484375}, [-1] = {0.12890625, 0.25390625, 0.515625, 1.0}},
@@ -54,6 +57,20 @@ local TALENT_ARROW_TEXTURECOORDS = {
     left = {[1] = {0.5, 1.0, 0, 0.5}, [-1] = {0.5, 1.0, 0.5, 1.0}}
 }
 
+local GLYPHTYPE_MAJOR_VAL = 1
+local GLYPHTYPE_MINOR_VAL = 2
+
+-- TexCoords on Interface\Spellbook\UI-GlyphFrame for the filled-slot icon per slot ID (0 = empty)
+local GLYPH_SLOT_COORDS = {
+    [0] = {0.78125,      0.91015625,  0.69921875, 0.828125},
+    [1] = {0,            0.12890625,  0.87109375, 1},
+    [2] = {0.130859375,  0.259765625, 0.87109375, 1},
+    [3] = {0.392578125,  0.521484375, 0.87109375, 1},
+    [4] = {0.5234375,    0.65234375,  0.87109375, 1},
+    [5] = {0.26171875,   0.390625,    0.87109375, 1},
+    [6] = {0.654296875,  0.783203125, 0.87109375, 1},
+}
+
 StaticPopupDialogs['IMPROVEDTALENTS_CONFIRM_LEARN_PREVIEW'] = {
     text = 'Learn these talents?',
     button1 = YES,
@@ -66,6 +83,10 @@ StaticPopupDialogs['IMPROVEDTALENTS_CONFIRM_LEARN_PREVIEW'] = {
 
 local function HasPetTalents()
     return UnitExists('pet') and GetNumTalentTabs(false, true) > 0
+end
+
+local function HasGlyphs()
+    return GetGlyphSocketInfo ~= nil
 end
 
 local function CreateScaleCheckbox(parent)
@@ -130,6 +151,133 @@ local function CreateSpecButton(parent, group)
     end)
     btn:SetScript('OnLeave', function() GameTooltip:Hide() end)
     return btn
+end
+
+local function CreateGlyphSlot(parent, slotID, glyphType)
+    local isMajor = glyphType == GLYPHTYPE_MAJOR_VAL
+    local btn = CreateFrame('Button', nil, parent)
+    btn:SetWidth(90); btn:SetHeight(90)
+    btn:RegisterForClicks('LeftButtonUp', 'RightButtonUp')
+
+    -- Major slots: larger outer ring and icon. Minor slots: smaller.
+    local setting = btn:CreateTexture(nil, 'BACKGROUND')
+    setting:SetTexture('Interface\\Spellbook\\UI-GlyphFrame')
+    if isMajor then
+        setting:SetWidth(108); setting:SetHeight(108)
+        setting:SetTexCoord(0.740234375, 0.953125, 0.484375, 0.697265625)
+    else
+        setting:SetWidth(86); setting:SetHeight(86)
+        setting:SetTexCoord(0.765625, 0.927734375, 0.15625, 0.31640625)
+    end
+    setting:SetPoint('CENTER', btn, 'CENTER', 0, 0)
+
+    local bgTex = btn:CreateTexture(nil, 'BORDER')
+    bgTex:SetTexture('Interface\\Spellbook\\UI-GlyphFrame')
+    bgTex:SetWidth(isMajor and 70 or 64); bgTex:SetHeight(isMajor and 70 or 64)
+    local ec = GLYPH_SLOT_COORDS[0]
+    bgTex:SetTexCoord(ec[1], ec[2], ec[3], ec[4])
+    bgTex:SetPoint('CENTER', btn, 'CENTER', 0, 0)
+    btn.bgTex = bgTex
+
+    local glyphIcon = btn:CreateTexture(nil, 'ARTWORK')
+    glyphIcon:SetTexture('Interface\\Spellbook\\UI-Glyph-Rune1')
+    glyphIcon:SetWidth(isMajor and 53 or 40); glyphIcon:SetHeight(isMajor and 53 or 40)
+    glyphIcon:SetPoint('CENTER', btn, 'CENTER', 0, 0)
+    -- Orange = Major, Blue = Minor
+    if isMajor then
+        glyphIcon:SetVertexColor(1, 0.4, 0)
+    else
+        glyphIcon:SetVertexColor(0.2, 0.5, 1)
+    end
+    glyphIcon:Hide()
+    btn.glyphIcon = glyphIcon
+
+    local ring = btn:CreateTexture(nil, 'OVERLAY')
+    ring:SetTexture('Interface\\Spellbook\\UI-GlyphFrame')
+    if isMajor then
+        ring:SetWidth(82); ring:SetHeight(82)
+        ring:SetPoint('CENTER', btn, 'CENTER', 0, -1)
+        ring:SetTexCoord(0.767578125, 0.92578125, 0.32421875, 0.482421875)
+    else
+        ring:SetWidth(62); ring:SetHeight(62)
+        ring:SetPoint('CENTER', btn, 'CENTER', 0, 1)
+        ring:SetTexCoord(0.787109375, 0.908203125, 0.033203125, 0.154296875)
+    end
+
+    local nameText = btn:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+    nameText:SetPoint('TOP', btn, 'BOTTOM', 0, -2)
+    nameText:SetWidth(100)
+    nameText:SetJustifyH('CENTER')
+    btn.nameText = nameText
+
+    btn.slotID = slotID
+    btn.glyphType = glyphType
+
+    btn:SetScript('OnClick', function(self, mouseButton)
+        local talentGroup = GetActiveTalentGroup and GetActiveTalentGroup() or 1
+        if mouseButton == 'RightButton' then
+            if IsShiftKeyDown() and talentGroup == (GetActiveTalentGroup and GetActiveTalentGroup() or 1) then
+                local _, _, glyphSpell = GetGlyphSocketInfo(self.slotID, talentGroup)
+                if glyphSpell then
+                    local glyphName = GetSpellInfo(glyphSpell)
+                    local dialog = StaticPopup_Show('CONFIRM_REMOVE_GLYPH', glyphName)
+                    if dialog then dialog.data = self.slotID end
+                end
+            end
+        else
+            if talentGroup == (GetActiveTalentGroup and GetActiveTalentGroup() or 1) then
+                pcall(PlaceGlyphInSocket, self.slotID)
+            end
+        end
+    end)
+    btn:SetScript('OnEnter', function(self)
+        GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
+        local talentGroup = GetActiveTalentGroup and GetActiveTalentGroup() or 1
+        if GameTooltip.SetGlyph then
+            GameTooltip:SetGlyph(self.slotID, talentGroup)
+        end
+        GameTooltip:Show()
+    end)
+    btn:SetScript('OnLeave', function() GameTooltip:Hide() end)
+    return btn
+end
+
+local function CreateGlyphPanel()
+    -- Panel sized snugly around the hexagon content (slot hit areas 90×90):
+    --   x span: -93-45=-138 to +91+45=+136 → 274 wide → panel 310
+    --   y span: +110+45=+155 to -108-45=-153 → 308 tall → panel 360
+    local panel = CreateFrame('Frame', nil, frame)
+    panel:SetWidth(310)
+    panel:SetHeight(360)
+    panel:SetPoint('CENTER', frame, 'CENTER', 0, 20)
+    panel:SetBackdrop({ bgFile = 'Interface\\Tooltips\\UI-Tooltip-Background' })
+    panel:SetBackdropColor(0, 0, 0.05, 0.75)
+    local bg = panel:CreateTexture(nil, 'BACKGROUND')
+    bg:SetTexture('Interface\\AddOns\\ImprovedTalents\\textures\\glyph')
+    bg:SetWidth(286)
+    bg:SetHeight(300)
+    bg:SetPoint('CENTER', panel, 'CENTER', 5, 2)
+
+    -- Alternating Major/Minor going clockwise from top (as visible in-game):
+    --   TOP(Major) → TOPRIGHT(Minor) → BOTTOMRIGHT(Major)
+    --   → BOTTOM(Minor) → BOTTOMLEFT(Major) → TOPLEFT(Minor)
+    panel.slots = {}
+    local layout = {
+        {id=1, t=GLYPHTYPE_MAJOR_VAL, x=1,   y=110},   -- TOP          (Major)
+        {id=5, t=GLYPHTYPE_MINOR_VAL, x=91,  y=54},    -- TOPRIGHT     (Minor)
+        {id=4, t=GLYPHTYPE_MAJOR_VAL, x=91,  y=-55},   -- BOTTOMRIGHT  (Major)
+        {id=2, t=GLYPHTYPE_MINOR_VAL, x=1,   y=-108},  -- BOTTOM       (Minor)
+        {id=6, t=GLYPHTYPE_MAJOR_VAL, x=-93, y=-55},   -- BOTTOMLEFT   (Major)
+        {id=3, t=GLYPHTYPE_MINOR_VAL, x=-93, y=54},    -- TOPLEFT      (Minor)
+    }
+    for _, s in ipairs(layout) do
+        local slot = CreateGlyphSlot(panel, s.id, s.t)
+        slot:SetPoint('CENTER', panel, 'CENTER', s.x, s.y)
+        panel.slots[s.id] = slot
+    end
+
+    panel:Hide()
+    frame.glyphPanel = panel
 end
 
 local function CreateMainFrame()
@@ -205,7 +353,7 @@ local function CreateMainFrame()
     end)
     frame.resetButton = resetButton
 
-    -- Pet talents toggle button (shown only when player has a pet with talents)
+    -- Pet / Glyph toggle buttons (bottom-right; shown when available, repositioned by UpdatePetButton)
     local petButton = CreateFrame('Button', nil, frame, 'UIPanelButtonTemplate')
     petButton:SetWidth(80)
     petButton:SetHeight(22)
@@ -214,20 +362,36 @@ local function CreateMainFrame()
     petButton:Hide()
     petButton:SetScript('OnClick', function()
         if isPetMode then
-            -- Switch back to player mode
             isPetMode = false
             for _, btn in pairs(petTalentButtons) do btn:Hide() end
         else
-            -- Switch to pet mode
             isPetMode = true
-            if not petButtonsCreated then
-                CreatePetTalents()
-            end
+            isGlyphMode = false
+            if not petButtonsCreated then CreatePetTalents() end
             for _, btn in pairs(playerTalentButtons) do btn:Hide() end
         end
         Update()
     end)
     frame.petButton = petButton
+
+    local glyphButton = CreateFrame('Button', nil, frame, 'UIPanelButtonTemplate')
+    glyphButton:SetWidth(80)
+    glyphButton:SetHeight(22)
+    glyphButton:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -10, 6)
+    glyphButton:SetText('Glyphs')
+    glyphButton:Hide()
+    glyphButton:SetScript('OnClick', function()
+        if isGlyphMode then
+            isGlyphMode = false
+            lastLayoutNumTabs = -1
+        else
+            isGlyphMode = true
+            isPetMode = false
+            for _, btn in pairs(petTalentButtons) do btn:Hide() end
+        end
+        Update()
+    end)
+    frame.glyphButton = glyphButton
 
     -- Dual-spec buttons (top-left, hidden when player has only one spec)
     local spec1Button = CreateSpecButton(frame, 1)
@@ -265,15 +429,37 @@ end
 
 UpdatePetButton = function()
     if not frame then return end
-    if HasPetTalents() then
-        frame.petButton:Show()
+    local hasPet   = HasPetTalents()
+    local hasGlyph = HasGlyphs()
+
+    if not hasPet and isPetMode then
+        isPetMode = false
+        for _, btn in pairs(petTalentButtons) do btn:Hide() end
+    end
+    if not hasGlyph and isGlyphMode then
+        isGlyphMode = false
+    end
+
+    if hasPet and hasGlyph then
+        frame.glyphButton:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -10, 6)
+        frame.glyphButton:SetText(isGlyphMode and 'Talents' or 'Glyphs')
+        frame.glyphButton:Show()
+        frame.petButton:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -10, 30)
         frame.petButton:SetText(isPetMode and 'Player' or 'Pet')
+        frame.petButton:Show()
+    elseif hasPet then
+        frame.petButton:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -10, 6)
+        frame.petButton:SetText(isPetMode and 'Player' or 'Pet')
+        frame.petButton:Show()
+        frame.glyphButton:Hide()
+    elseif hasGlyph then
+        frame.glyphButton:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -10, 6)
+        frame.glyphButton:SetText(isGlyphMode and 'Talents' or 'Glyphs')
+        frame.glyphButton:Show()
+        frame.petButton:Hide()
     else
         frame.petButton:Hide()
-        if isPetMode then
-            isPetMode = false
-            for _, btn in pairs(petTalentButtons) do btn:Hide() end
-        end
+        frame.glyphButton:Hide()
     end
 end
 
@@ -324,6 +510,13 @@ end
 
 UpdatePreviewBar = function()
     if not frame then return end
+    if isGlyphMode then
+        frame.previewCheckbox:Hide()
+        frame.learnButton:Hide()
+        frame.resetButton:Hide()
+        return
+    end
+    frame.previewCheckbox:Show()
     local isActiveSpec = isPetMode or (currentTalentGroup == GetActiveTalentGroup())
     local cp = GetUnspentTalentPoints(false, isPetMode, currentTalentGroup)
     if previewMode and isActiveSpec and cp > 0 then
@@ -340,6 +533,44 @@ UpdatePreviewBar = function()
     else
         frame.learnButton:Hide()
         frame.resetButton:Hide()
+    end
+end
+
+UpdateGlyphPanel = function()
+    if not frame then return end
+    if not isGlyphMode then
+        if frame.glyphPanel then frame.glyphPanel:Hide() end
+        return
+    end
+    if not frame.glyphPanel then
+        CreateGlyphPanel()
+    end
+    frame.glyphPanel:Show()
+    local talentGroup = GetActiveTalentGroup and GetActiveTalentGroup() or 1
+    for slotID, slot in pairs(frame.glyphPanel.slots) do
+        local enabled, _, glyphSpell, iconFilename = GetGlyphSocketInfo(slotID, talentGroup)
+        if enabled then
+            slot:Show()
+            if glyphSpell then
+                slot.glyphIcon:Show()
+                slot.glyphIcon:SetTexture(iconFilename or 'Interface\\Spellbook\\UI-Glyph-Rune1')
+                slot.nameText:SetText(GetSpellInfo(glyphSpell) or '')
+                local c = GLYPH_SLOT_COORDS[slotID]
+                slot.bgTex:SetTexCoord(c[1], c[2], c[3], c[4])
+            else
+                slot.glyphIcon:Hide()
+                slot.nameText:SetText('')
+                local c = GLYPH_SLOT_COORDS[0]
+                slot.bgTex:SetTexCoord(c[1], c[2], c[3], c[4])
+            end
+        else
+            -- Locked slot: show the locked texture placeholder
+            slot.glyphIcon:Hide()
+            slot.nameText:SetText('Locked')
+            local c = GLYPH_SLOT_COORDS[0]
+            slot.bgTex:SetTexCoord(c[1], c[2], c[3], c[4])
+            slot:Show()
+        end
     end
 end
 
@@ -710,6 +941,17 @@ Update = function()
     UpdateSpecButtons()
     UpdatePreviewBar()
 
+    if isGlyphMode then
+        LayoutTreeFrames(0)           -- hides all trees, shrinks frame width to 440
+        if talentFrameHeight > 0 then frame:SetHeight(520) end
+        UpdateGlyphPanel()
+        frame.headerText:SetText('Glyphs')
+        frame.pointsLeft:SetText('')
+        return
+    end
+    if frame.glyphPanel then frame.glyphPanel:Hide() end
+    if talentFrameHeight > 0 then frame:SetHeight(talentFrameHeight) end
+
     local numTabs
     local currentButtons
     local tierPoints
@@ -843,6 +1085,7 @@ local function CreateAllTalents()
     local treeH  = maxTier * 63 + 10
     local frameH = 50 + 50 + treeH + 60
     frame:SetHeight(frameH)
+    talentFrameHeight = frameH
     for i = 1, 3 do
         treeFrames[i].frame:SetHeight(treeH)
         local bgH = treeH + 90
@@ -898,6 +1141,12 @@ pcall(function()
     eventFrame:RegisterEvent('PREVIEW_TALENT_POINTS_CHANGED')
     eventFrame:RegisterEvent('PREVIEW_PET_TALENT_POINTS_CHANGED')
 end)
+pcall(function()
+    eventFrame:RegisterEvent('GLYPH_ADDED')
+    eventFrame:RegisterEvent('GLYPH_REMOVED')
+    eventFrame:RegisterEvent('GLYPH_UPDATED')
+    eventFrame:RegisterEvent('USE_GLYPH')
+end)
 eventFrame:SetScript('OnEvent', function(self, event, arg1)
     if event == 'UNIT_PET' then
         if arg1 == 'player' then
@@ -912,6 +1161,8 @@ eventFrame:SetScript('OnEvent', function(self, event, arg1)
             UpdatePetButton()
             Update()
         end
+    elseif event == 'GLYPH_ADDED' or event == 'GLYPH_REMOVED' or event == 'GLYPH_UPDATED' or event == 'USE_GLYPH' then
+        if isGlyphMode then UpdateGlyphPanel() end
     else
         Update()
     end

@@ -1,7 +1,7 @@
 ## Interface: 30300
 ## Title: Improved Talents
 ## Notes: Improved Talents panel
-## Version: 1.5
+## Version: 1.6
 ## Author: belthazor
 ## SavedVariables: TALENTSVIEWER_SV
 
